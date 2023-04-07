@@ -9,8 +9,9 @@ public class Main {
         JavaSchoolStarter starter = new JavaSchoolStarter();
 
         try {
-            List<Map<String, Object>> insert = starter.execute("insert Values 'iD' = 5, " +
-                    "'age' = '21', 'active'=false, 'lastname'='gtr'");
+            List<Map<String, Object>> insert = starter.execute("insert values 'id' = 1, 'age'= 21, 'active' = true 'lastname'='jAvaTeSt'");
+            List<Map<String, Object>> update = starter.execute("update values 'age' = 30, 'active' = false where 'id' = 1");
+            int a = 0;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
