@@ -6,11 +6,12 @@ import java.util.regex.Pattern;
 
 public class SqlHandler {
     private final SqlDB sqlDB = new SqlDB();
-    private Map<String, Object> where = new HashMap<>();
+    private List<List<Object>> where = new ArrayList<>();
     private Map<String, Object> values = new HashMap<>();
     private List<Map<String, Object>> list = new ArrayList<>();
+    private List<String> operators = new ArrayList<>();
 
-    private String search(String line, String regex) {
+    public static String search(String line, String regex) {
         Pattern pattern = Pattern.compile(regex);
         String result = null;
 
@@ -37,7 +38,7 @@ public class SqlHandler {
         else if(key.equals("cost") && value.matches("'*\\d+\\.*\\d*'*")){
             val = Double.valueOf(value.replaceAll("'", ""));
         }
-        else if(key.equals("lastname") && value.matches("'\\w+'")){
+        else if(key.equals("lastname") && value.matches("'%*\\w+%*'")){
             val = value.replaceAll("'", "");
         }
 
@@ -45,10 +46,9 @@ public class SqlHandler {
     }
 
 
-    private boolean searchKeyValue(String line, String regex) {
+    private boolean searchKeyValue(String line) {
         boolean result = true;
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(line);
+        Matcher matcher = Pattern.compile("'\\w+' *= *'*\\w+'*").matcher(line);
 
         while(matcher.find()){
             String s[] = matcher.group().replaceAll(" ","").split("=");
@@ -66,28 +66,88 @@ public class SqlHandler {
         return result;
     }
 
+    private boolean searchWhere(String line){
+        boolean result = true;
+        Matcher matcher = Pattern.compile("'\\w+' *(((>=|<=|!=|=|>|<) *'*\\w+'*)|((?i)(ilike|like) *'%*\\w+%*'))").matcher(line);
+
+        while(matcher.find()){
+            String s = matcher.group();
+
+            String key = search(s.toLowerCase(), "^'(lastname|id|age|cost|active)'").replaceAll("'","");
+            String operator = search(s.toLowerCase(), "(>=|<=|!=|=|>|<|(?i)like|(?i)ilike)");
+            String str = search(s, "'*%*\\w+%*'*$");
+            Object val = getValue(key, str);
+
+            if(val == null){
+                //выбросить исключение
+                result = false;
+            }
+            else {
+                where.add(List.of(key, operator, val));
+            }
+        }
+
+        return result;
+    }
+
+    private boolean searchOperators(String line){
+        boolean result = true;
+        Matcher matcher = Pattern.compile("(and|or)").matcher(line.toLowerCase());
+
+        while(matcher.find()){
+            operators.add(matcher.group());
+
+            /*if(val == null){
+                //выбросить исключение
+                result = false;
+            }
+            else{
+                values.put(s[0], val);
+            }*/
+        }
+
+        return result;
+    }
+
 
 
     public List<Map<String, Object>> query(String request){
         String command = search(request.toLowerCase(), "^(insert values|update values|select|delete)");
+        List<Map<String, Object>> out = new ArrayList<>();
 
         if(command.equals("insert values")){
-            if(searchKeyValue(request, "'\\w+' *= *'*\\w+'*")) {
-                return sqlDB.insert(values);
+            if(searchKeyValue(request)) {
+                out = sqlDB.insert(values);
+                values.clear();
             }
         }
         else if(command.equals("update values")){
-            System.out.println("update");
+            String s[] = request.split("(?i)where");
+            if(searchKeyValue(s[0]) && searchOperators(s[1]) && searchWhere(s[1])){
+                out = sqlDB.update(values, where, operators);
+                clearSqlHandler();
+            }
         }
         else if(command.equals("select")){
-            System.out.println("select");
+            if(searchOperators(request) && searchWhere(request)) {
+                out = sqlDB.select(where, operators);
+            }
         }
         else if(command.equals("delete")){
-            System.out.println("delete");
+            if(searchOperators(request) && searchWhere(request)) {
+                out = sqlDB.delete(where, operators);
+                sqlDB.test();
+            }
         }
 
 
-        return null;
+        return out;
+    }
+
+    private void clearSqlHandler(){
+        values.clear();
+        operators.clear();
+        where.clear();
     }
 
 
