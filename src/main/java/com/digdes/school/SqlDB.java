@@ -1,5 +1,7 @@
 package com.digdes.school;
 
+import com.digdes.school.Exception.ExceptionInvalidEntryOfWhereConditionValues;
+
 import java.util.*;
 
 public class SqlDB {
@@ -8,6 +10,7 @@ public class SqlDB {
     public void test(){
         int c = 0;
     }
+
 
     //дополнительное использование метода createOrUpdateRecord сделано
     // для того чтобы выходной список записей не ссылался напрямую в бд,
@@ -24,7 +27,7 @@ public class SqlDB {
 
 
     public List<Map<String, Object>> update(Map<String, Object> values,
-                                            List<List<Object>> where, List<String> operators){
+                                            List<List<Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> updateList;
         List<Map<String, Object>> outList = new ArrayList<>();
 
@@ -42,7 +45,7 @@ public class SqlDB {
     }
 
 
-    public List<Map<String, Object>> select(List<List<Object>> where, List<String> operators){
+    public List<Map<String, Object>> select(List<List<Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> outList;
 
         if(where.size() > 0) {
@@ -55,7 +58,7 @@ public class SqlDB {
     }
 
 
-    public List<Map<String, Object>> delete(List<List<Object>> where, List<String> operators){
+    public List<Map<String, Object>> delete(List<List<Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> outList;
 
         if(where.size() > 0) {
@@ -85,7 +88,7 @@ public class SqlDB {
     }
 
 
-    private boolean numericalCheck(double valueRecord, String operator, double value){
+    private boolean numericalCheck(double valueRecord, String operator, double value) throws ExceptionInvalidEntryOfWhereConditionValues {
         boolean result = false;
 
         if((operator.equals("=") && (valueRecord == value))
@@ -97,7 +100,8 @@ public class SqlDB {
             result = true;
         } else if(operator.matches("((?)like|(?i)ilike)")) {
             int a = 0;
-            //нужно выбросить исключение
+            //нужно выбросить исключение неверная операция сравнения
+            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
@@ -117,11 +121,13 @@ public class SqlDB {
         return result;
     }
 
+
     private boolean iLike(String line, String regex){
         return like(line, "(?i)(" + regex + ")");
     }
 
-    private boolean stringCheck(String valueRecord, String operator, String value){
+
+    private boolean stringCheck(String valueRecord, String operator, String value) throws ExceptionInvalidEntryOfWhereConditionValues {
         boolean result = false;
 
         if((operator.equals("ilike") && iLike(valueRecord, value))
@@ -131,14 +137,15 @@ public class SqlDB {
             result = true;
         } else if(operator.matches("(>=|<=|>|<)")) {
             int a = 0;
-            //нужно выбросить исключение
+            //нужно выбросить исключение неверная операция сравнения
+            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
     }
 
 
-    private boolean aBooleanCheck(boolean valueRecord, String operator, boolean value){
+    private boolean aBooleanCheck(boolean valueRecord, String operator, boolean value) throws ExceptionInvalidEntryOfWhereConditionValues {
         boolean result = false;
 
         if((operator.equals("=") && (valueRecord == value))
@@ -146,13 +153,15 @@ public class SqlDB {
             result = true;
         } else if(operator.matches("(>=|<=|>|<|(?)like|(?i)ilike)")) {
             result = false;
-            //нужно выбросить исключение
+            //нужно выбросить исключение неверная операция сравнения
+            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
     }
 
-    private boolean conditionCheck(Map<String, Object> record, List<Object> condition){
+
+    private boolean conditionCheck(Map<String, Object> record, List<Object> condition) throws Exception {
         boolean result = false;
         String key = (String)condition.get(0);
 
@@ -170,7 +179,8 @@ public class SqlDB {
         return result;
     }
 
-    private List<Map<String, Object>> searchByWhere(List<List<Object>> where, List<String> operators) {
+
+    private List<Map<String, Object>> searchByWhere(List<List<Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> recordsFound = new ArrayList<>();
         boolean result;
 

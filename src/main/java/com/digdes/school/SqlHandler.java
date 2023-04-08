@@ -1,5 +1,9 @@
 package com.digdes.school;
 
+import com.digdes.school.Exception.ExceptionIncorrectEntryOfWhereConditions;
+import com.digdes.school.Exception.ExceptionIncorrectValuesEntry;
+import com.digdes.school.Exception.ExceptionOperators;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,7 +14,7 @@ public class SqlHandler {
     private Map<String, Object> values = new HashMap<>();
     private List<String> operators = new ArrayList<>();
 
-    public static String search(String line, String regex) {
+    private String search(String line, String regex) {
         Pattern pattern = Pattern.compile(regex);
         String result = null;
 
@@ -37,7 +41,7 @@ public class SqlHandler {
         else if(key.equals("cost") && value.matches("'*\\d+\\.*\\d*'*")){
             val = Double.valueOf(value.replaceAll("'", ""));
         }
-        else if(key.equals("lastname") && value.matches("'%*\\w+%*'")){
+        else if(key.equals("lastname") && value.matches("'%*\\w+%*\\w*%*'")){
             val = value.replaceAll("'", "");
         }
 
@@ -45,29 +49,24 @@ public class SqlHandler {
     }
 
 
-    private boolean searchKeyValue(String line) {
-        boolean result = true;
+    private void searchKeyValue(String line) throws ExceptionIncorrectValuesEntry {
         Matcher matcher = Pattern.compile("'\\w+' *= *'*\\w+\\.*\\w*'*").matcher(line);
 
         while(matcher.find()){
             String s[] = matcher.group().replaceAll(" ","").split("=");
             s[0] = search(s[0].toLowerCase(), "'(lastname|id|age|cost|active)'").replaceAll("'", "");
             Object val = getValue(s[0], s[1]);
-            if(val == null){
-                //выбросить исключение
-                result = false;
-            }
-            else{
+            if(val != null){
                 values.put(s[0], val);
+            } else{
+                throw new ExceptionIncorrectValuesEntry();
             }
         }
-
-        return result;
     }
 
-    private boolean searchWhere(String line){
-        boolean result = true;
-        Matcher matcher = Pattern.compile("'\\w+' *(((>=|<=|!=|=|>|<) *'*\\w+'*)|((?i)(ilike|like) *'%*\\w+%*'))").matcher(line);
+
+    private void searchWhere(String line) throws Exception {
+        Matcher matcher = Pattern.compile("'\\w+' *(>=|<=|!=|=|>|<|(?i)ilike|(?i)like) *'*%*\\w+%*\\w*%*'*").matcher(line);
 
         while(matcher.find()){
             String s = matcher.group();
@@ -78,19 +77,21 @@ public class SqlHandler {
             Object val = getValue(key, str);
 
             if(val == null){
-                //выбросить исключение
-                result = false;
+                throw new ExceptionIncorrectEntryOfWhereConditions();
             }
             else {
                 where.add(List.of(key, operator, val));
             }
         }
+        if(where.isEmpty()){
+            throw new ExceptionIncorrectEntryOfWhereConditions();
+        }
 
-        return result && searchOperators(line);
+        searchOperators(line);
     }
 
-    private boolean searchOperators(String line){
-        boolean result = true;
+
+    private void searchOperators(String line) throws ExceptionOperators {
         Matcher matcher = Pattern.compile("(and|or)").matcher(line.toLowerCase());
 
         while(matcher.find()){
@@ -98,44 +99,44 @@ public class SqlHandler {
         }
 
         if((where.size() != 0) && (operators.size() != 0) && (where.size() - operators.size() != 1)){
-            //выбросить исключение
-            result = false;
+            throw new ExceptionOperators();
         }
-
-        return result;
     }
 
 
-
-    public List<Map<String, Object>> query(String request){
+    public List<Map<String, Object>> query(String request) throws Exception {
         String command = search(request.toLowerCase(), "^(insert values|update values|select|delete)");
         List<Map<String, Object>> out = new ArrayList<>();
 
         if(command.equals("insert values")){
-            if(searchKeyValue(request)) {
-                out = sqlDB.insert(values);
-                values.clear();
-            }
+            searchKeyValue(request);
+            out = sqlDB.insert(values);
+            values.clear();
         } else if(command.equals("update values")){
             String s[] = request.split("(?i)where");
-            if(searchKeyValue(s[0]) && searchWhere(s[1])){
-                out = sqlDB.update(values, where, operators);
-                clearSqlHandler();
+            searchKeyValue(s[0]);
+            if(s.length == 2){
+                searchWhere(s[1]);
             }
+            out = sqlDB.update(values, where, operators);
+            clearSqlHandler();
         } else if(command.equals("select")){
-            if(searchWhere(request)) {
-                out = sqlDB.select(where, operators);
-                clearSqlHandler();
+            if(request.split("(?i)where").length == 2) {
+                searchWhere(request);
             }
+            out = sqlDB.select(where, operators);
+            clearSqlHandler();
         } else if(command.equals("delete")){
-            if(searchWhere(request)) {
-                out = sqlDB.delete(where, operators);
-                clearSqlHandler();
+            if(request.split("(?i)where").length == 2) {
+                searchWhere(request);
             }
+            out = sqlDB.delete(where, operators);
+            clearSqlHandler();
         }
 
         return out;
     }
+
 
     private void clearSqlHandler(){
         values.clear();
