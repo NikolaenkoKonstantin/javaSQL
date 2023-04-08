@@ -11,8 +11,8 @@ public class JavaSchoolStarter {
     public List<Map<String,Object>> execute(String request) throws Exception {
         //Здесь начало исполнения вашего кода
 
-
-        return sqlHandler.query(request);
+        List<Map<String,Object>> out = sqlHandler.query(request);
+        return out;
     }
 
 
