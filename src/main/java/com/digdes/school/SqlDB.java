@@ -9,8 +9,70 @@ public class SqlDB {
         int c = 0;
     }
 
+    //дополнительное использование метода createOrUpdateRecord сделано
+    // для того чтобы выходной список записей не ссылался напрямую в бд,
+    // как я делал изначально, но потом решил, что это неверно, ибо если
+    // ссылается напрямую, то все изменения видны и в предыдущих выходных списках
+    //и так во всех 4 методах!!!
+    public List<Map<String, Object>> insert(Map<String, Object> values){
+        List<Map<String, Object>> outList = new ArrayList<>();
+        db.add(createOrUpdateRecord(new HashMap<>(), values));
+        outList.add(createOrUpdateRecord(new HashMap<>(), values));
 
-    private void createOrUpdateRecord(Map<String, Object> record, Map<String, Object> values){
+        return outList;
+    }
+
+
+    public List<Map<String, Object>> update(Map<String, Object> values,
+                                            List<List<Object>> where, List<String> operators){
+        List<Map<String, Object>> updateList;
+        List<Map<String, Object>> outList = new ArrayList<>();
+
+        if(where.size() > 0) {
+            updateList = searchByWhere(where, operators);
+        } else {
+            updateList = db;
+        }
+
+        if(!updateList.isEmpty()) {
+            outList = edit(updateList, values);
+        }
+
+        return outList;
+    }
+
+
+    public List<Map<String, Object>> select(List<List<Object>> where, List<String> operators){
+        List<Map<String, Object>> outList;
+
+        if(where.size() > 0) {
+            outList = searchByWhere(where, operators);
+        } else {
+            outList = db;
+        }
+
+        return copyDB(outList);
+    }
+
+
+    public List<Map<String, Object>> delete(List<List<Object>> where, List<String> operators){
+        List<Map<String, Object>> outList;
+
+        if(where.size() > 0) {
+            outList = searchByWhere(where, operators);
+        } else {
+            outList = copyDB(db);
+        }
+
+        for(int i = 0; i < outList.size(); i++){
+            db.remove(outList.get(i));
+        }
+
+        return copyDB(outList);
+    }
+
+
+    private Map<String, Object> createOrUpdateRecord(Map<String, Object> record, Map<String, Object> values){
         Iterator<Map.Entry<String, Object>> iterator = values.entrySet().iterator();
         for (int j = 0; ; j++) {
             if(iterator.hasNext()) {
@@ -18,17 +80,8 @@ public class SqlDB {
                 record.put(entry.getKey(), entry.getValue());
             } else break;
         }
-    }
 
-
-
-    public List<Map<String, Object>> insert(Map<String, Object> values){
-        List<Map<String, Object>> outList = new ArrayList<>();
-        Map<String, Object> newRecord = new HashMap<>();
-        createOrUpdateRecord(newRecord, values);
-        db.add(newRecord);
-        outList.add(newRecord);
-        return outList;
+        return record;
     }
 
 
@@ -138,7 +191,8 @@ public class SqlDB {
             }
 
             if(result){
-                recordsFound.add(temp);
+                Map<String, Object> newTemp = temp;
+                recordsFound.add(newTemp);
             }
         }
 
@@ -146,63 +200,29 @@ public class SqlDB {
     }
 
 
-    public List<Map<String, Object>> update(Map<String, Object> values,
-                                                List<List<Object>> where, List<String> operators){
-        List<Map<String, Object>> outList;
-
-        if(where.size() > 0) {
-            outList = searchByWhere(where, operators);
-        } else {
-            outList = db;
-        }
+    private List<Map<String, Object>> edit(List<Map<String, Object>> updateList, Map<String, Object> values){
+        List<Map<String, Object>> outList = new ArrayList<>();
 
         int j = 0;
         for(int i = 0; i < db.size(); i++){
             Map<String, Object> tempDB = db.get(i);
-            if(tempDB == outList.get(j)){
+            if(tempDB == updateList.get(j)){
                 j++;
-                createOrUpdateRecord(tempDB, values);
+                tempDB = createOrUpdateRecord(tempDB, values);
+                outList.add(createOrUpdateRecord(new HashMap<>(), tempDB));
             }
         }
 
         return outList;
     }
 
-    public List<Map<String, Object>> select(List<List<Object>> where, List<String> operators){
-        List<Map<String, Object>> outList;
 
-        if(where.size() > 0) {
-            outList = searchByWhere(where, operators);
-        } else {
-            outList = db;
-        }
-
-        return outList;
-    }
-
-
-    public List<Map<String, Object>> delete(List<List<Object>> where, List<String> operators){
-        List<Map<String, Object>> outList;
-
-        if(where.size() > 0) {
-            outList = searchByWhere(where, operators);
-        } else {
-            outList = copyDB();
-        }
-
-        for(int i = 0; i < outList.size(); i++){
-            db.remove(outList.get(i));
-        }
-
-        return outList;
-    }
-
-    private List<Map<String, Object>> copyDB(){
+    private List<Map<String, Object>> copyDB(List<Map<String, Object>> in){
         List<Map<String, Object>> copy = new ArrayList<>();
-        int size = db.size();
+        int size = in.size();
 
         for(int i = 0; i < size; i++){
-            copy.add(db.get(i));
+            copy.add(createOrUpdateRecord(new HashMap<>(), in.get(i)));
         }
 
         return copy;
