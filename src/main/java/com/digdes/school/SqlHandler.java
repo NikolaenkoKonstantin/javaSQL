@@ -8,7 +8,6 @@ public class SqlHandler {
     private final SqlDB sqlDB = new SqlDB();
     private List<List<Object>> where = new ArrayList<>();
     private Map<String, Object> values = new HashMap<>();
-    private List<Map<String, Object>> list = new ArrayList<>();
     private List<String> operators = new ArrayList<>();
 
     public static String search(String line, String regex) {
@@ -48,7 +47,7 @@ public class SqlHandler {
 
     private boolean searchKeyValue(String line) {
         boolean result = true;
-        Matcher matcher = Pattern.compile("'\\w+' *= *'*\\w+'*").matcher(line);
+        Matcher matcher = Pattern.compile("'\\w+' *= *'*\\w+\\.*\\w*'*").matcher(line);
 
         while(matcher.find()){
             String s[] = matcher.group().replaceAll(" ","").split("=");
@@ -87,7 +86,7 @@ public class SqlHandler {
             }
         }
 
-        return result;
+        return result && searchOperators(line);
     }
 
     private boolean searchOperators(String line){
@@ -96,14 +95,11 @@ public class SqlHandler {
 
         while(matcher.find()){
             operators.add(matcher.group());
+        }
 
-            /*if(val == null){
-                //выбросить исключение
-                result = false;
-            }
-            else{
-                values.put(s[0], val);
-            }*/
+        if((where.size() != 0) && (operators.size() != 0) && (where.size() - operators.size() != 1)){
+            //выбросить исключение
+            result = false;
         }
 
         return result;
@@ -120,26 +116,23 @@ public class SqlHandler {
                 out = sqlDB.insert(values);
                 values.clear();
             }
-        }
-        else if(command.equals("update values")){
+        } else if(command.equals("update values")){
             String s[] = request.split("(?i)where");
-            if(searchKeyValue(s[0]) && searchOperators(s[1]) && searchWhere(s[1])){
+            if(searchKeyValue(s[0]) && searchWhere(s[1])){
                 out = sqlDB.update(values, where, operators);
                 clearSqlHandler();
             }
-        }
-        else if(command.equals("select")){
-            if(searchOperators(request) && searchWhere(request)) {
+        } else if(command.equals("select")){
+            if(searchWhere(request)) {
                 out = sqlDB.select(where, operators);
+                clearSqlHandler();
             }
-        }
-        else if(command.equals("delete")){
-            if(searchOperators(request) && searchWhere(request)) {
+        } else if(command.equals("delete")){
+            if(searchWhere(request)) {
                 out = sqlDB.delete(where, operators);
-                sqlDB.test();
+                clearSqlHandler();
             }
         }
-
 
         return out;
     }
@@ -149,8 +142,4 @@ public class SqlHandler {
         operators.clear();
         where.clear();
     }
-
-
-
-
 }
