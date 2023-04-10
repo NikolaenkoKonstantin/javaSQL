@@ -1,33 +1,30 @@
 package com.digdes.school;
 
-import com.digdes.school.Exception.ExceptionInvalidEntryOfWhereConditionValues;
+import com.digdes.school.Exception.ExceptionOfCompareOperators;
+import com.digdes.school.Exception.ExceptionRecordIsEmpty;
 
 import java.util.*;
 
 public class SqlDB {
     private final List<Map<String, Object>> db = new ArrayList<>();
 
-    public void test(){
-        int c = 0;
-    }
 
-
-    //дополнительное использование метода createOrUpdateRecord сделано
+    //дополнительное использование метода createRecord сделано
     // для того чтобы выходной список записей не ссылался напрямую в бд,
     // как я делал изначально, но потом решил, что это неверно, ибо если
     // ссылается напрямую, то все изменения видны и в предыдущих выходных списках
     //и так во всех 4 методах!!!
-    public List<Map<String, Object>> insert(Map<String, Object> values){
+    public List<Map<String, Object>> insert(Map<String, Object> values) throws ExceptionRecordIsEmpty {
         List<Map<String, Object>> outList = new ArrayList<>();
-        db.add(createOrUpdateRecord(new HashMap<>(), values));
-        outList.add(createOrUpdateRecord(new HashMap<>(), values));
+        db.add(createRecord(new HashMap<>(), values));
+        outList.add(createRecord(new HashMap<>(), values));
 
         return outList;
     }
 
 
-    public List<Map<String, Object>> update(Map<String, Object> values,
-                                            List<List<Object>> where, List<String> operators) throws Exception {
+    public List<Map<String, Object>> update(Map<String, Object> values, List<Map<String, Object>> where,
+                                            List<String> operators) throws Exception {
         List<Map<String, Object>> updateList;
         List<Map<String, Object>> outList = new ArrayList<>();
 
@@ -45,7 +42,7 @@ public class SqlDB {
     }
 
 
-    public List<Map<String, Object>> select(List<List<Object>> where, List<String> operators) throws Exception {
+    public List<Map<String, Object>> select(List<Map<String, Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> outList;
 
         if(where.size() > 0) {
@@ -58,7 +55,7 @@ public class SqlDB {
     }
 
 
-    public List<Map<String, Object>> delete(List<List<Object>> where, List<String> operators) throws Exception {
+    public List<Map<String, Object>> delete(List<Map<String, Object>> where, List<String> operators) throws Exception {
         List<Map<String, Object>> outList;
 
         if(where.size() > 0) {
@@ -75,7 +72,40 @@ public class SqlDB {
     }
 
 
-    private Map<String, Object> createOrUpdateRecord(Map<String, Object> record, Map<String, Object> values){
+    //проверка всех колонок на null
+    private void nullCheck(Map<String, Object> values) throws ExceptionRecordIsEmpty {
+        boolean result = false;
+        Iterator<Map.Entry<String, Object>> iterator = values.entrySet().iterator();
+        for (int j = 0; ; j++) {
+            if(iterator.hasNext()) {
+                Map.Entry<String, Object> entry = iterator.next();
+                result = result || entry.getValue() != null;
+            } else break;
+        }
+
+        if(!result){
+            throw new ExceptionRecordIsEmpty();
+        }
+    }
+
+
+    //создание новой записи
+    private Map<String, Object> createRecord(Map<String, Object> record, Map<String, Object> values)
+            throws ExceptionRecordIsEmpty {
+        record.put("id", values.getOrDefault("id", null));
+        record.put("age", values.getOrDefault("age", null));
+        record.put("cost", values.getOrDefault("cost", null));
+        record.put("active", values.getOrDefault("active", null));
+        record.put("lastname", values.getOrDefault("lastname", null));
+        nullCheck(record);
+
+        return record;
+    }
+
+
+    //изменение данных записи
+    private Map<String, Object> updateRecord(Map<String, Object> record, Map<String, Object> values)
+            throws ExceptionRecordIsEmpty {
         Iterator<Map.Entry<String, Object>> iterator = values.entrySet().iterator();
         for (int j = 0; ; j++) {
             if(iterator.hasNext()) {
@@ -84,37 +114,41 @@ public class SqlDB {
             } else break;
         }
 
+        nullCheck(record);
+
         return record;
     }
 
 
-    private boolean numericalCheck(double valueRecord, String operator, double value) throws ExceptionInvalidEntryOfWhereConditionValues {
+    //проверка числовых условий сравнения + проверка сравнения null
+    //(value != null) катируется, остальные операторы сравнения не катируются
+    private boolean numericalCheck(Double d1, String operator, Double d2) throws ExceptionOfCompareOperators {
         boolean result = false;
 
-        if((operator.equals("=") && (valueRecord == value))
-                || (operator.equals("!=") && (valueRecord != value))
-                || (operator.equals(">=") && (valueRecord >= value))
-                || (operator.equals("<=") && (valueRecord <= value))
-                || (operator.equals(">") && (valueRecord > value))
-                || (operator.equals("<") && (valueRecord < value))) {
+        if(operator.matches("((?)like|(?i)ilike)")
+                || (d1 == null && operator.matches("(>=|<=|>|<|=)"))) {
+            throw new ExceptionOfCompareOperators();
+        } else if((operator.equals("=") && (d1.compareTo(d2) == 0))
+                || (operator.equals("!=") && (d1.compareTo(d2) != 0))
+                || (operator.equals(">=") && (d1.compareTo(d2) >= 0))
+                || (operator.equals("<=") && (d1.compareTo(d2) <= 0))
+                || (operator.equals(">") && (d1.compareTo(d2) > 0))
+                || (operator.equals("<") && (d1.compareTo(d2) < 0))) {
             result = true;
-        } else if(operator.matches("((?)like|(?i)ilike)")) {
-            int a = 0;
-            //нужно выбросить исключение неверная операция сравнения
-            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
     }
 
 
+    //оператор like
     private boolean like(String line, String regex){
         boolean result = false;
         regex = regex.replaceAll("%", "\\\\w*")
                 .replaceAll("_", "\\\\w?")
                 .replaceAll("\\^\\[", "[^");
 
-        if(line.matches(regex)){
+        if(SqlHandler.matchesUnicode(line, regex)){
             result = true;
         }
 
@@ -122,57 +156,62 @@ public class SqlDB {
     }
 
 
+    //оператор ilike
     private boolean iLike(String line, String regex){
         return like(line, "(?i)(" + regex + ")");
     }
 
 
-    private boolean stringCheck(String valueRecord, String operator, String value) throws ExceptionInvalidEntryOfWhereConditionValues {
+    //проверка строковых условий сравнения + проверка сравнения null
+    //(value != null) катируется, остальные операторы сравнения не катируются
+    private boolean stringCheck(String s1, String operator, String s2) throws ExceptionOfCompareOperators {
         boolean result = false;
 
-        if((operator.equals("ilike") && iLike(valueRecord, value))
-                || (operator.equals("like") && like(valueRecord, value))
-                || (operator.equals("=") && valueRecord.equals(value))
-                || (operator.equals("!=") && !valueRecord.equals(value))){
+        if(operator.matches("(>=|<=|>|<)") || (s1 == null && operator.matches("((?i)ilike|(?i)like|=)"))) {
+            throw new ExceptionOfCompareOperators();
+        } else if((operator.equals("ilike") && iLike(s1, s2))
+                || (operator.equals("like") && like(s1, s2))
+                || (operator.equals("=") && s1.equals(s2))
+                || (operator.equals("!=") && !s1.equals(s2))){
             result = true;
-        } else if(operator.matches("(>=|<=|>|<)")) {
-            int a = 0;
-            //нужно выбросить исключение неверная операция сравнения
-            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
     }
 
 
-    private boolean aBooleanCheck(boolean valueRecord, String operator, boolean value) throws ExceptionInvalidEntryOfWhereConditionValues {
+    //проверка логических условий сравнения + проверка сравнения null
+    //(value != null) катируется, остальные операторы сравнения не катируются
+    private boolean aBooleanCheck(Boolean b1, String operator, Boolean b2) throws ExceptionOfCompareOperators {
         boolean result = false;
 
-        if((operator.equals("=") && (valueRecord == value))
-                || (operator.equals("!=") && (valueRecord != value))){
+        if(operator.matches("(>=|<=|>|<|(?)like|(?i)ilike)") || (b1 == null && operator.matches("="))) {
+            throw new ExceptionOfCompareOperators();
+        } else if((operator.equals("=") && (b1.compareTo(b2) == 0))
+                || (operator.equals("!=") && (b1.compareTo(b2) != 0))){
             result = true;
-        } else if(operator.matches("(>=|<=|>|<|(?)like|(?i)ilike)")) {
-            result = false;
-            //нужно выбросить исключение неверная операция сравнения
-            throw new ExceptionInvalidEntryOfWhereConditionValues();
         }
 
         return result;
     }
 
 
-    private boolean conditionCheck(Map<String, Object> record, List<Object> condition) throws Exception {
+    //распределитель проверок условий
+    private boolean conditionCheck(Map<String, Object> record, Map<String, Object> condition) throws Exception {
         boolean result = false;
-        String key = (String)condition.get(0);
+        String key = (String)condition.get("key");
+        String operator = (String)condition.get("operator");
 
-        if((key.matches("(id|age)")
-                && numericalCheck((long)record.get(key), (String)condition.get(1), (long)condition.get(2)))
+        if((operator.equals("!=") && record.get(key) == null)
+                || (key.matches("(id|age)")
+                && numericalCheck(record.get(key) == null ? null : (double) (long) record.get(key),
+                operator, (double)(long)condition.get("value")))
                 || (key.matches("(cost)")
-                && numericalCheck((double)record.get(key), (String)condition.get(1), (double)condition.get(2)))
+                && numericalCheck((Double)record.get(key), operator, (Double)condition.get("value")))
                 || (key.matches("lastname")
-                && stringCheck((String) record.get(key), (String)condition.get(1), (String) condition.get(2)))
+                && stringCheck((String) record.get(key), operator, (String) condition.get("value")))
                 || (key.matches("active")
-                && aBooleanCheck((boolean)record.get(key), (String)condition.get(1), (boolean)condition.get(2)))){
+                && aBooleanCheck((Boolean)record.get(key), operator, (Boolean)condition.get("value")))){
             result = true;
         }
 
@@ -180,7 +219,9 @@ public class SqlDB {
     }
 
 
-    private List<Map<String, Object>> searchByWhere(List<List<Object>> where, List<String> operators) throws Exception {
+    //поиск подходящих строк по условиям where учитывая and/or
+    private List<Map<String, Object>> searchByWhere(List<Map<String, Object>> where,
+                                                    List<String> operators) throws Exception {
         List<Map<String, Object>> recordsFound = new ArrayList<>();
         boolean result;
 
@@ -210,7 +251,8 @@ public class SqlDB {
     }
 
 
-    private List<Map<String, Object>> edit(List<Map<String, Object>> updateList, Map<String, Object> values){
+    //изменений подходящхи под условия строк
+    private List<Map<String, Object>> edit(List<Map<String, Object>> updateList, Map<String, Object> values) throws ExceptionRecordIsEmpty {
         List<Map<String, Object>> outList = new ArrayList<>();
 
         int j = 0;
@@ -218,8 +260,8 @@ public class SqlDB {
             Map<String, Object> tempDB = db.get(i);
             if(tempDB == updateList.get(j)){
                 j++;
-                tempDB = createOrUpdateRecord(tempDB, values);
-                outList.add(createOrUpdateRecord(new HashMap<>(), tempDB));
+                tempDB = updateRecord(tempDB, values);
+                outList.add(createRecord(new HashMap<>(), tempDB));
             }
         }
 
@@ -227,12 +269,13 @@ public class SqlDB {
     }
 
 
-    private List<Map<String, Object>> copyDB(List<Map<String, Object>> in){
+    //копирование нужного списка записей
+    private List<Map<String, Object>> copyDB(List<Map<String, Object>> in) throws ExceptionRecordIsEmpty {
         List<Map<String, Object>> copy = new ArrayList<>();
         int size = in.size();
 
         for(int i = 0; i < size; i++){
-            copy.add(createOrUpdateRecord(new HashMap<>(), in.get(i)));
+            copy.add(createRecord(new HashMap<>(), in.get(i)));
         }
 
         return copy;
